@@ -199,7 +199,7 @@ module WebHDFS
       check_options(options, OPT_TABLE['SETTIMES'])
       unless options.has_key?('modificationtime') or options.has_key?('accesstime') or
           options.has_key?(:modificationtime) or options.has_key?(:accesstime)
-        raise ArgumentError, "'chown' needs at least one of modificationtime or accesstime"
+        raise ArgumentError, "'touch' needs at least one of modificationtime or accesstime"
       end
       res = operate_requests('PUT', path, 'SETTIMES', options)
       res.code == '200'
@@ -248,10 +248,28 @@ module WebHDFS
       api_path(path) + '?' + query
     end
 
+    def get_headers(add_octet_stream_header)
+      headers = {}
+      base64_token = ENV['HADOOP_DELEGATION_TOKEN_BASE64']
+      if !base64_token.nil? then
+        headers['X-Hadoop-Delegation-Token'] = base64_token
+      end
+      if add_octet_stream_header then
+        headers['Content-Type'] = 'application/octet-stream'
+      end
+      if headers.length == 0 then
+        return nil
+      end
+      return headers
+    end
+
     REDIRECTED_OPERATIONS = ['APPEND', 'CREATE', 'OPEN', 'GETFILECHECKSUM']
     def operate_requests(method, path, op, params={}, payload=nil)
+      headers = get_headers(
+          (not @httpfs_mode and REDIRECTED_OPERATIONS.include?(op)) ||
+          (@httpfs_mode and not payload.nil?))
       if not @httpfs_mode and REDIRECTED_OPERATIONS.include?(op)
-        res = request(@host, @port, method, path, op, params, nil)
+        res = request(@host, @port, method, path, op, params, nil, headers)
         unless res.is_a?(Net::HTTPRedirection) and res['location']
           msg = "NameNode returns non-redirection (or without location header), code:#{res.code}, body:#{res.body}."
           raise WebHDFS::RequestFailedError, msg
@@ -262,13 +280,9 @@ module WebHDFS
                 else
                   uri.path
                 end
-        request(uri.host, uri.port, method, rpath, nil, {}, payload, {'Content-Type' => 'application/octet-stream'})
+        request(uri.host, uri.port, method, rpath, nil, {}, payload, headers)
       else
-        if @httpfs_mode and not payload.nil?
-          request(@host, @port, method, path, op, params, payload, {'Content-Type' => 'application/octet-stream'})
-        else
-          request(@host, @port, method, path, op, params, payload)
-        end
+        request(@host, @port, method, path, op, params, payload, headers)
       end
     end
 
