@@ -250,7 +250,7 @@ module WebHDFS
 
     def get_headers(add_octet_stream_header)
       headers = {}
-      base64_token = ENV['HADOOP_DELEGATION_TOKEN_BASE64']
+      base64_token = ENV['WEBHDFS_DELEGATION_TOKEN_BASE64']
       if !base64_token.nil? then
         headers['X-Hadoop-Delegation-Token'] = base64_token
       end
